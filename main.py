@@ -1,6 +1,7 @@
-from fastapi import FastAPI, File, UploadFile
-from pydantic import BaseModel
-from typing import List
+import fitz  # PyMuPDF: Para analizar el pdf y extraer el texto
+from fastapi import FastAPI, File, UploadFile 
+from pydantic import BaseModel # Pydantic: Para control de errores en tipado y evitar problemas al recibir la información
+from typing import List 
 
 app = FastAPI(title="CV Analyzer Tool", version="1.0.0")
 
@@ -20,19 +21,30 @@ def home():
     return {"mensaje": "API de CV Analyzer funcionando correctamente"}
 
 @app.post("/analizar-cv")
-async def analizar_curriculum(file: UploadFile = File(...)):
+async def analizar_curriculum(file: UploadFile = File(...)):  #el async es pa que trabaje en paralelo 
     """
-    Esta ruta recibe el PDF.
-    Por ahora, solo te dirá el nombre del archivo y el tipo.
+    Recibe el PDF, extrae el texto crudo y lo devuelve.
     """
-    # 1. Validamos que sea un PDF
+    # 1. Validar PDF
     if file.content_type != "application/pdf":
-        return {"error": "El archivo debe ser un PDF"}
+        return {"error": "El archivo debe estar en formato PDF"}
     
-    # 2. Aquí iría la lógica de extracción de texto (lo haremos en el siguiente paso)
+    # 2. Leer el archivo en memoria (bytes)
+    contenido_pdf = await file.read()
     
+    # 3. Abrir el PDF con PyMuPDF
+    # "stream" permite abrirlo desde la memoria RAM sin guardarlo en disco
+    doc = fitz.open(stream=contenido_pdf, filetype="pdf")
+    
+    texto_completo = ""
+    
+    # 4. Recorrer cada página y extraer texto
+    for pagina in doc:
+        texto_completo += pagina.get_text() + "\n"
+        
+    # 5. Devolver el resultado
     return {
         "filename": file.filename,
-        "content_type": file.content_type,
-        "mensaje": "Archivo recibido con éxito. Listo para procesar."
+        "total_paginas": len(doc),
+        "texto_recuperado": texto_completo  # <--- En teoría está bien todo dentro de un string pq finalmente el analisis lo hará la IA. En caso de que quisieramos buscar x palabras clave, no hay necesidad de que sea una lista (?)
     }
